@@ -1,49 +1,70 @@
+## Task 0.4
+## Modules
+
+
 class Module:
     """
-    Modules form a tree that store parameters and other
-    submodules. They make up the basis of neural network stacks.
-
     Attributes:
         _modules (dict of name x :class:`Module`): Storage of the child modules
         _parameters (dict of name x :class:`Parameter`): Storage of the module's parameters
-        training (bool): Whether the module is in training mode or evaluation mode
+        mode (string): Mode of operation, can be {"train", "eval"}.
 
     """
 
     def __init__(self):
         self._modules = {}
         self._parameters = {}
-        self.training = True
+        self.mode = "train"
 
     def modules(self):
-        "Return the direct child modules of this module."
+        "Return the child modules of this module."
         return self.__dict__["_modules"].values()
 
     def train(self):
         "Set the mode of this module and all descendent modules to `train`."
+        self.mode = "train"
+
+        # for i in self._modules.values():
+        #    i.train()
+
+        for i in self._modules.values():
+            i.train()
         # TODO: Implement for Task 0.4.
-        raise NotImplementedError('Need to implement for Task 0.4')
+        # raise NotImplementedError('Need to implement for Task 0.4')
 
     def eval(self):
         "Set the mode of this module and all descendent modules to `eval`."
+
+        self.mode = "eval"
+        for i in self._modules.values():
+            i.eval()
+
+        for i in self.modules():
+            i.eval()
         # TODO: Implement for Task 0.4.
-        raise NotImplementedError('Need to implement for Task 0.4')
+        # raise NotImplementedError('Need to implement for Task 0.4')
 
     def named_parameters(self):
         """
         Collect all the parameters of this module and its descendents.
-
-
         Returns:
-            list of pairs: Contains the name and :class:`Parameter` of each ancestor parameter.
+            dict: Each name (key) and :class:`Parameter` (value) under this module.
         """
+        # TODO: Implement for Task 0.4.# TODO: Implement for Task 0.4.
+        tmp = {}
+        for a, b in self._parameters.items():
+            tmp[a] = b
+
+        for c, b in self._modules.items():
+            for a, b in b._parameters.items():
+                tmp[c + "." + a] = b
+
+        return tmp
         # TODO: Implement for Task 0.4.
-        raise NotImplementedError('Need to implement for Task 0.4')
+        # raise NotImplementedError('Need to implement for Task 0.4')
 
     def parameters(self):
-        "Enumerate over all the parameters of this module and its descendents."
-        # TODO: Implement for Task 0.4.
-        raise NotImplementedError('Need to implement for Task 0.4')
+        return self.named_parameters().values()
 
     def add_parameter(self, k, v):
         """
@@ -56,7 +77,7 @@ class Module:
         Returns:
             Parameter: Newly created parameter.
         """
-        val = Parameter(v, k)
+        val = Parameter(v)
         self.__dict__["_parameters"][k] = val
         return val
 
@@ -74,6 +95,8 @@ class Module:
 
         if key in self.__dict__["_modules"]:
             return self.__dict__["_modules"][key]
+
+        return self.__getattribute__(key)
 
     def __call__(self, *args, **kwargs):
         return self.forward(*args, **kwargs)
@@ -117,24 +140,16 @@ class Parameter:
     any value for testing.
     """
 
-    def __init__(self, x=None, name=None):
+    def __init__(self, x=None):
         self.value = x
-        self.name = name
         if hasattr(x, "requires_grad_"):
             self.value.requires_grad_(True)
-            if self.name:
-                self.value.name = self.name
 
     def update(self, x):
         "Update the parameter value."
         self.value = x
         if hasattr(x, "requires_grad_"):
             self.value.requires_grad_(True)
-            if self.name:
-                self.value.name = self.name
 
     def __repr__(self):
         return repr(self.value)
-
-    def __str__(self):
-        return str(self.value)

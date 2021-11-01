@@ -1,19 +1,22 @@
 import torch
-import minitorch
+import datasets
+import matplotlib.pyplot as plt
+
+PTS = 250
+DATASET = datasets.Xor(PTS)
+HIDDEN = 10
+RATE = 0.5
 
 
-def default_log_fn(epoch, total_loss, correct, losses):
-    print("Epoch ", epoch, " loss ", total_loss, "correct", correct)
-
-
+# Model with
 class Network(torch.nn.Module):
-    def __init__(self, hidden_layers):
+    def __init__(self):
         super().__init__()
 
         # Submodules
-        self.layer1 = Linear(2, hidden_layers)
-        self.layer2 = Linear(hidden_layers, hidden_layers)
-        self.layer3 = Linear(hidden_layers, 1)
+        self.layer1 = Linear(2, HIDDEN)
+        self.layer2 = Linear(HIDDEN, HIDDEN)
+        self.layer3 = Linear(HIDDEN, 1)
 
     def forward(self, x):
         h = self.layer1.forward(x).relu()
@@ -24,61 +27,49 @@ class Network(torch.nn.Module):
 class Linear(torch.nn.Module):
     def __init__(self, in_size, out_size):
         super().__init__()
-        self.weight = torch.nn.Parameter(2 * (torch.rand((in_size, out_size)) - 0.5))
-        self.bias = torch.nn.Parameter(2 * (torch.rand((out_size,)) - 0.5))
+        self.weight = torch.nn.Parameter(2 * (torch.rand(in_size, out_size) - 0.5))
+        self.bias = torch.nn.Parameter(2 * (torch.rand(out_size) - 0.5))
 
     def forward(self, x):
         return x @ self.weight + self.bias
 
 
-class TorchTrain:
-    def __init__(self, hidden_layers):
-        self.hidden_layers = hidden_layers
-        self.model = Network(hidden_layers)
+model = Network()
 
-    def run_one(self, x):
-        return self.model.forward(torch.tensor([x]))
+# Dataset
+data = DATASET
 
-    def run_many(self, X):
-        return self.model.forward(torch.tensor(X)).detach()
+losses = []
+for epoch in range(500):
 
-    def train(
-        self, data, learning_rate, max_epochs=500, log_fn=default_log_fn,
-    ):
-        self.model = Network(self.hidden_layers)
-        self.max_epochs = max_epochs
-        model = self.model
+    # Forward
+    out = model.forward(torch.tensor(data.X, requires_grad=True)).view(data.N)
+    y = torch.tensor(data.y)
+    probs = (out * y) + (out - 1.0) * (y - 1.0)
+    loss = -probs.log().sum()
 
-        losses = []
-        for epoch in range(1, max_epochs + 1):
+    # Update
+    loss.view(1).backward()
 
-            # Forward
-            out = model.forward(torch.tensor(data.X, requires_grad=True)).view(data.N)
-            y = torch.tensor(data.y)
-            probs = (out * y) + (out - 1.0) * (y - 1.0)
-            loss = -probs.log().sum()
+    for p in model.parameters():
+        if p.grad is not None:
+            p.data = p.data - RATE * (p.grad / float(data.N))
+            p.grad.zero_()
 
-            # Update
-            loss.view(1).backward()
+    # Logging
+    pred = out > 0.5
+    correct = ((y == 1) * (pred)).sum() + ((y == 0) * (~pred)).sum()
+    losses.append(loss)
 
-            for p in model.parameters():
-                if p.grad is not None:
-                    p.data = p.data - learning_rate * (p.grad / float(data.N))
-                    p.grad.zero_()
+    if epoch % 10 == 0:
+        print("Epoch ", epoch, " loss ", loss, "correct", correct)
+        im = f"graph epoch: {epoch} loss: {loss}"
 
-            # Logging
-            pred = out > 0.5
-            correct = ((y == 1) * (pred)).sum() + ((y == 0) * (~pred)).sum()
-            loss_num = loss.reshape(-1).item()
-            losses.append(loss_num)
+    if epoch % 50 == 0:
 
-            if epoch % 10 == 0 or epoch == max_epochs:
-                log_fn(epoch, loss_num, correct.item(), losses)
+        def check(x):
+            return model.forward(torch.tensor(x).view(1, 2))[0, 0]
 
-
-if __name__ == "__main__":
-    PTS = 250
-    HIDDEN = 10
-    RATE = 0.5
-
-    TorchTrain(HIDDEN).train(minitorch.datasets.xor(PTS), RATE)
+        data.graph(im, check)
+        plt.plot(losses, c="blue")
+        data.vis.matplot(plt, win="loss")
